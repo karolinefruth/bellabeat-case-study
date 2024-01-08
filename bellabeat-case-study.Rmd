@@ -1,0 +1,619 @@
+---
+title: 'Bellabeat Case Study: FitBit Tracker Data in R'
+author: "Karoline Fruth"
+date: "2023-11-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Ask
+
+With this analysis I wanted to answer the following questions:
+
+* What trends in the usage of smart device data can be identified?
+* Are some of those trends applicable to bellabeat devices?
+* How can those insights be used to promote bellabeat devices?
+
+## Process
+
+Firstly the necessary packages for the analysis are loaded.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, results='hide'}
+library(tidyverse)
+library(janitor)
+library(hrbrthemes)
+library(viridis)
+```
+
+Now the data is imported and stored in variables.
+
+```{r message=FALSE, warning=FALSE, echo=TRUE, results='hide'}
+daily_activity <- read_csv("Fitabase_Data/dailyActivity_merged.csv")
+daily_calories <- read_csv("Fitabase_Data/dailyCalories_merged.csv")
+daily_intensities <- read_csv("Fitabase_Data/dailyIntensities_merged.csv")
+daily_steps <- read_csv("Fitabase_Data/dailySteps_merged.csv")
+daily_sleep <- read_csv("Fitabase_Data/sleepDay_merged.csv")
+
+heartrate_seconds <- read_csv("Fitabase_Data/heartrate_seconds_merged.csv")
+
+hourly_calories <- read_csv("Fitabase_Data/hourlyCalories_merged.csv")
+hourly_intensities <- read_csv("Fitabase_Data/hourlyIntensities_merged.csv")
+hourly_steps <- read_csv("Fitabase_Data/hourlySteps_merged.csv")
+
+minute_calories_narrow <- read_csv("Fitabase_Data/minuteCaloriesNarrow_merged.csv")
+minute_calories_wide <- read_csv("Fitabase_Data/minuteCaloriesWide_merged.csv")
+minute_intensities_narrow <- read_csv("Fitabase_Data/minuteIntensitiesNarrow_merged.csv")
+minute_intensities_wide <- read_csv("Fitabase_Data/minuteIntensitiesWide_merged.csv")
+minute_METs_narrow <- read_csv("Fitabase_Data/minuteMETsNarrow_merged.csv")
+minute_sleep <- read_csv("Fitabase_Data/minuteSleep_merged.csv")
+minute_steps_narrow <- read_csv("Fitabase_Data/minuteStepsNarrow_merged.csv")
+minute_steps_wide <- read_csv("Fitabase_Data/minuteStepsWide_merged.csv")
+
+weight_log <- read_csv("Fitabase_Data/weightLogInfo_merged.csv")
+```
+
+
+### Cleaning data
+
+For the data to be used in the analysis it needs to be clean.
+First the names for all variables in all the data frames are transformed to be consistent and duplicated are removed.
+
+```{r}
+daily_activity <- daily_activity %>% clean_names() %>% distinct()
+daily_calories <- daily_calories %>% clean_names() %>% distinct()
+daily_intensities <- daily_intensities %>% clean_names() %>% distinct()
+daily_steps <- daily_steps %>% clean_names() %>% distinct()
+daily_sleep <- daily_sleep %>% clean_names() %>% distinct()
+heartrate_seconds <- heartrate_seconds %>% clean_names() %>% distinct()
+hourly_calories <- hourly_calories %>% clean_names() %>% distinct()
+hourly_intensities <- hourly_intensities %>% clean_names() %>% distinct()
+hourly_steps <- hourly_steps %>% clean_names() %>% distinct()
+minute_calories_narrow <- minute_calories_narrow %>% clean_names() %>% distinct()
+minute_calories_wide <- minute_calories_wide %>% clean_names() %>% distinct()
+minute_intensities_narrow <- minute_intensities_narrow %>% clean_names() %>% distinct()
+minute_intensities_wide <- minute_intensities_wide %>% clean_names() %>% distinct()
+minute_METs_narrow <- minute_METs_narrow %>% clean_names() %>% distinct()
+minute_sleep <- minute_sleep %>% clean_names() %>% distinct()
+minute_steps_narrow <- minute_steps_narrow %>% clean_names() %>% distinct()
+minute_steps_wide <- minute_steps_wide %>% clean_names() %>% distinct()
+weight_log <- weight_log %>% clean_names() %>% distinct()
+```
+
+Next the data type for the dates is changed and some column are manually renamed for consistency.
+
+```{r}
+daily_activity <- daily_activity %>% 
+  mutate(activity_date = as.Date(activity_date, format = "%m/%d/%Y"))
+daily_calories <- daily_calories %>% 
+  mutate(activity_day = as.Date(activity_day, format = "%m/%d/%Y")) %>% 
+  rename(activity_date = activity_day)
+daily_intensities <- daily_intensities %>% 
+  mutate(activity_day = as.Date(activity_day, format = "%m/%d/%Y")) %>% 
+  rename(activity_date = activity_day)
+daily_steps <- daily_steps %>% 
+  mutate(activity_day = as.Date(activity_day, format = "%m/%d/%Y")) %>% 
+  rename(activity_date = activity_day)
+
+
+heartrate_seconds <- heartrate_seconds %>% 
+  mutate(time = mdy_hms(time)) %>% 
+  rename(date_time = time)
+hourly_calories <- hourly_calories %>% 
+  mutate(activity_hour = mdy_hms(activity_hour))
+hourly_intensities <- hourly_intensities %>% 
+  mutate(activity_hour = mdy_hms(activity_hour))
+hourly_steps <- hourly_steps %>% 
+  mutate(activity_hour = mdy_hms(activity_hour))
+
+minute_calories_narrow <- minute_calories_narrow %>% 
+  mutate(activity_minute = mdy_hms(activity_minute))
+minute_calories_wide <- minute_calories_wide %>% 
+  mutate(activity_hour = mdy_hms(activity_hour))
+
+minute_intensities_narrow <- minute_intensities_narrow %>% 
+  mutate(activity_minute = mdy_hms(activity_minute))
+minute_intensities_wide <- minute_intensities_wide %>% 
+  mutate(activity_hour = mdy_hms(activity_hour)) 
+
+minute_METs_narrow <- minute_METs_narrow %>% 
+  mutate(activity_minute = mdy_hms(activity_minute))
+minute_sleep <- minute_sleep %>% 
+  mutate(date = mdy_hms(date)) %>% 
+  rename(sleep_minute = date)
+
+minute_steps_narrow <- minute_steps_narrow %>% 
+  mutate(activity_minute = mdy_hms(activity_minute))
+minute_steps_wide <- minute_steps_wide %>% 
+  mutate(activity_hour = mdy_hms(activity_hour)) 
+
+weight_log <- weight_log %>% 
+  mutate(date = mdy_hms(date))
+```
+
+Since the time for the daily sleep data is always the same it is removed. It doesn't add any additional information and this way the comparison between different values for each days is easier.
+
+```{r message=FALSE, warning=FALSE}
+daily_sleep <- daily_sleep %>% 
+  separate(sleep_day, c("sleep_date"), sep = " ") %>% 
+  mutate(sleep_date = as.Date(sleep_date, format = "%m/%d/%Y")) 
+```
+
+The MET values are devided by 10, because they were multiplied by 10 upon export from Fitbase.
+
+```{r}
+minute_METs_narrow <- minute_METs_narrow %>% 
+  mutate(me_ts = me_ts/10)
+```
+
+## Analyse
+
+### Usage of the tracking options
+
+First we take a look at the different tracking options and how many users used them and how frequently they did so.
+
+```{r}
+n_distinct(daily_activity$id, na.rm = TRUE)
+n_distinct(daily_calories$id, na.rm = TRUE)
+n_distinct(daily_intensities$id, na.rm = TRUE)
+n_distinct(daily_sleep$id, na.rm = TRUE)
+n_distinct(daily_steps$id, na.rm = TRUE)
+n_distinct(heartrate_seconds$id, na.rm = TRUE)
+n_distinct(minute_METs_narrow$id, na.rm = TRUE)
+n_distinct(weight_log$id, na.rm = TRUE)
+```
+We can see, that 33 people used the smart device for tracking their activities and METs, 24 tracked their sleep, 14 people tracked their heartrate and only 8 people tracked their weight.
+
+Next we investigate the frequency of use by creating summary tables for the data frames. Since the activity data already summarizes the data from calories, intensities and steps we only use this data frame for this step in the analysis.
+
+```{r warning=FALSE}
+summary_activity <- daily_activity %>% 
+  group_by(id) %>% 
+  summarise(count = n_distinct(activity_date)) %>% 
+  mutate(mean = mean(count))
+summary_activity$group <- "activity" 
+
+summary_sleep <- daily_sleep %>% 
+  group_by(id) %>% 
+  summarise(count = n_distinct(sleep_date)) %>% 
+  mutate(mean = mean(count))
+summary_sleep$group <- "sleep"
+
+summary_heartrate <- heartrate_seconds %>% 
+  group_by(id) %>%
+  separate(date_time, c("date"), sep=" ") %>% 
+  summarise(count = n_distinct(date)) %>% 
+  mutate(mean = mean(count))
+summary_heartrate$group <- "heartrate"
+
+summary_METs <- minute_METs_narrow %>% 
+  group_by(id) %>%
+  separate(activity_minute, c("date"), sep=" ") %>% 
+  summarise(count = n_distinct(date)) %>% 
+  mutate(mean = mean(count))
+summary_METs$group <- "METs"
+
+summary_weight <- weight_log %>% 
+  group_by(id) %>% 
+  summarise(count = n_distinct(date)) %>% 
+  mutate(mean = mean(count))
+summary_weight$group <- "weight"
+
+summary <- rbind(summary_activity, summary_sleep, summary_heartrate, summary_METs, summary_weight)
+head(summary)
+```
+To get a better look at the distribution of the frequency of use for each feature of the smart device, we plot the results of the summary table.
+
+```{r}
+ggplot(summary, 
+       aes(x=group, y=count, fill=group)) + 
+  geom_boxplot() +
+  geom_jitter(color="black", size=0.4, alpha=0.9) +
+  scale_fill_viridis_d(alpha = 0.6) +
+  theme_ipsum() +
+  theme(legend.position = "none",
+        plot.title = element_text(size=12),
+        plot.subtitle = element_text(size=11)
+  ) +
+  labs(title = "Days of use for available features",
+       subtitle = "From 2016-04-12 To 2016-05-12",
+       caption = "Data collected by Möbius",
+       x = "",
+       y = "number of days") 
+```
+  
+We can see that the tracking of the daily activity and METs is used the most. 
+However there are some outliers that don't use these features as regularly but only 5 to 20 times a month.
+The tracking of the heartrate is also used frequently, with half the users tracking their heartrate at least 26 times a month.
+Sleep it appears is tracked regularly by some but not as freqeuently by others.
+Lastly the amount of times users track their weight in a month is relatively low, with at least half the users, who use this feature, tracking their weight less than 5 times a month.
+
+### Sleep habits
+
+Next we investigate the sleeping habits of the users.
+First we take a look at the amount of hours the users sleep on average.
+
+```{r}
+daily_sleep %>% 
+  group_by(id) %>% 
+  summarise(average_sleep_hours = mean(total_minutes_asleep)/60) %>% 
+  ggplot(aes(x="", y=average_sleep_hours)) +
+  geom_boxplot() +
+  geom_jitter(color="black", size=0.4, alpha=0.9) +
+  scale_fill_viridis_d(alpha = 0.6) +
+  theme_ipsum() +
+  theme(legend.position = "none",
+        plot.title = element_text(size=12),
+        plot.subtitle = element_text(size=11)
+  ) +
+  labs(title = "Average hours slept by day",
+       subtitle = "From 2016-04-12 To 2016-05-12",
+       caption = "Data collected by Möbius",
+       x = "",
+       y = "hours slept") 
+
+```
+  
+Half of the users sleep less than 7 hours per day on average. 
+Next we investigate how often users sleep per day.
+
+```{r}
+ggplot(daily_sleep, 
+       aes(x=as.factor(total_sleep_records), y=total_minutes_asleep/60, fill=as.factor(total_sleep_records))) + 
+  geom_boxplot() +
+  geom_jitter(color="black", size=0.4, alpha=0.9) +
+  scale_fill_viridis_d(alpha = 0.6) +
+  theme_ipsum() +
+  theme(legend.position = "none",
+        plot.title = element_text(size=12),
+        plot.subtitle = element_text(size=11)
+  ) +
+  labs(title = "Hours slept by day",
+       subtitle = "From 2016-04-12 To 2016-05-12",
+       caption = "Data collected by Möbius",
+       x = "times slept per day",
+       y = "hours slept") 
+
+```
+  
+Apparently most users sleep only once per day, however the amount of sleep the users get increases with the amount of times they sleep per day.  
+
+Finally we take a look at the quality of sleep.
+
+```{r}
+daily_sleep %>% 
+  mutate(asleep_in_bed = case_when(
+    (100*total_minutes_asleep)/total_time_in_bed < 80 ~ "less than 80%",
+    (100*total_minutes_asleep)/total_time_in_bed >= 80 ~ "more than 80%" )) %>% 
+  group_by(asleep_in_bed) %>% 
+  summarise(n=n())
+
+minute_sleep %>% 
+  group_by(id) %>% 
+  summarise(min_value=min(value),
+            mean_value=mean(value),
+            max_value=max(value)) %>% 
+  head()
+
+minute_sleep %>% 
+  group_by(value) %>% 
+  summarise(n=n()) %>% 
+  mutate(p=100*n/sum(n))
+```
+In most cases the users sleep for more that 80% of the time they spend in their bed.
+The quality of sleep also seems to be good, with over 90% of the slept minutes being evaluated with the value 1, which means the user was asleep. 
+The number 2 means the user was restless and the number 3 means the user was awake.
+
+### Activities
+
+
+```{r}
+daily_activity %>% 
+  group_by(id) %>% 
+  summarise(average_steps = mean(total_steps)) %>% 
+  mutate(category=case_when(
+    average_steps < 3000                          ~ "<3000 steps",
+    average_steps >= 3000 & average_steps <= 8000 ~ "3000-8000 steps",
+    average_steps > 8000                          ~ ">8000 steps" )) %>% 
+  group_by(category) %>% 
+  summarise(users = sum(n()))
+```
+  
+  When we take a look at the average daily steps for each user, we see, that only 5 users take less that 3000 steps per day on average.
+The rest are fairly active with 14 users taking an average of between 3000 and 8000 steps per day, and 14 users taking more that 8000 daily steps on average. 
+
+
+```{r}
+daily_steps_average <- daily_steps %>% 
+  group_by(activity_date) %>% 
+  summarise(average_steps=mean(step_total),
+            total_steps=sum(step_total),
+            min_steps=min(step_total),
+            max_steps=max(step_total))
+
+ggplot() +
+  geom_line(data=daily_steps_average, aes(x=activity_date, y=average_steps), color="black") +
+  scale_x_date(date_breaks = "day", date_labels = "%a") +
+  theme_ipsum() +
+  theme(legend.position = "none",
+        plot.title = element_text(size=12),
+        plot.subtitle = element_text(size=11)
+  ) +
+  labs(title = "Daily steps of all users",
+       subtitle = "From 2016-04-12 To 2016-05-12",
+       caption = "Data collected by Möbius",
+       x = "",
+       y = "average steps") 
+```
+  
+By plotting the average daily steps across all users and days there isn't really a pattern that can be recognized.
+
+```{r}
+daily_steps$weekday <- weekdays(daily_steps$activity_date)
+
+daily_steps_weekday <- daily_steps %>% 
+  group_by(weekday) %>% 
+  summarise(total_steps=sum(step_total),
+            average_steps=mean(step_total))
+daily_steps_weekday$weekday <- factor(daily_steps_weekday$weekday,
+                                      levels=c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"))
+
+ggplot(daily_steps_weekday, aes(x=weekday, y=total_steps, fill=weekday)) +
+  geom_bar(stat="identity") +
+  theme_ipsum() +
+  scale_fill_viridis_d(alpha = 0.6) +
+  theme(legend.position = "none",
+        plot.title = element_text(size=12),
+        plot.subtitle = element_text(size=11)
+  ) +
+  labs(title = "Total daily steps per weekday",
+       subtitle = "From 2016-04-12 To 2016-05-12",
+       caption = "Data collected by Möbius",
+       x = "",
+       y = "steps") 
+```
+
+Plotting the total amount of steps across all users per weekday shows that the most steps are taken on Tuesday and the least amount of steps are taken on Sunday.
+
+### Complete Day
+
+We now take a look at the days as a whole, by combining the daily activity and daily sleep data.
+This introduces some null values.
+It also allows us to check how many hours of the day the smart device was tracking.
+
+```{r}
+day_complete <- daily_activity %>% 
+  full_join(daily_sleep,
+  by=c('id'='id', 'activity_date'='sleep_date')
+)
+sum(is.na(day_complete))
+
+day_complete <- day_complete %>% 
+  mutate(total_hours = (fairly_active_minutes + lightly_active_minutes + very_active_minutes + sedentary_minutes + total_time_in_bed)/60)
+
+day_complete %>% 
+  mutate(total_time=case_when(
+    total_hours < 24   ~ "less than 24h",
+    total_hours == 24  ~ "24h",
+    total_hours > 24   ~ "more than 24h",
+    is.na(total_hours) ~ "missing data")) %>% 
+  group_by(total_time) %>% 
+  summarise(data_points=n())
+```
+  
+The 126 instances with less that 24h tracked can be explained by the tracker not being worn the whole day.
+However there appear to be 155 data points, where more than 24h were tracked per day.
+This means that there is likely something wrong with the data.
+
+```{r}
+day_complete <- day_complete %>% 
+  mutate(total_active_minutes = (lightly_active_minutes + fairly_active_minutes + very_active_distance)) 
+
+day_complete %>% 
+  group_by(id) %>% 
+  summarise(average_active_time=mean(total_active_minutes, na.rm = TRUE)/60,
+            average_sitting_time=mean(sedentary_minutes, na.rm = TRUE)/60,
+            average_resting_time=mean(total_time_in_bed, na.rm = TRUE)/60)
+```
+
+Looking at the way the users spend their day, it appears a majority spend the most time sitting.
+Aside from one user, they spend at least an hour being active.
+There seems to be some unrealistic data, since one user spends an average of 20 hours sitting, while only sleeping for 1,15 hours.
+
+Next the relationships between two variables are investigated.
+
+```{r message=FALSE, warning=FALSE}
+ggplot(day_complete,
+       aes(x=(fairly_active_minutes + lightly_active_minutes + very_active_minutes)/60, y=total_minutes_asleep/60)) + 
+  geom_point() +
+  geom_smooth(method = lm, color="red", se=TRUE) +
+  theme_ipsum() +
+  theme(plot.title = element_text(size=12),
+        plot.subtitle = element_text(size=11)
+  ) +
+  labs(title = "Correlation between daily activity and sleep",
+       subtitle = "From 2016-04-12 To 2016-05-12",
+       caption = "Data collected by Möbius",
+       x = "daily active hours",
+       y = "daily sleep") 
+```
+  
+There doesnt appear to be a strong correlation between the amount of activity and sleep of the users.
+
+```{r message=FALSE, warning=FALSE}
+ggplot(day_complete,
+       aes(x=(sedentary_minutes)/60, y=total_minutes_asleep/60)) + 
+  geom_point() +
+  geom_smooth(method = lm, color="red", se=TRUE) +
+  theme_ipsum() +
+  theme(plot.title = element_text(size=12),
+        plot.subtitle = element_text(size=11)
+  ) +
+  labs(title = "Correlation between daily sedentary minutes and sleep",
+       subtitle = "From 2016-04-12 To 2016-05-12",
+       caption = "Data collected by Möbius",
+       x = "daily sedentary hours",
+       y = "daily sleep") 
+```
+  
+However the daily sedentary hours seem to correlate negatively with the amount of sleep per day.
+
+```{r message=FALSE, warning=FALSE}
+ggplot(day_complete,
+       aes(x=(very_active_distance+moderately_active_distance+light_active_distance), y=calories)) + 
+  geom_point() +
+  geom_smooth(method = lm, color="red", se=TRUE) +
+  theme_ipsum() +
+  theme(plot.title = element_text(size=12),
+        plot.subtitle = element_text(size=11)
+  ) +
+  labs(title = "Correlation between daily activity minutes and calories",
+       subtitle = "From 2016-04-12 To 2016-05-12",
+       caption = "Data collected by Möbius",
+       x = "daily active hours",
+       y = "daily calories") 
+```
+  
+There also seems to be a positive correlation between the time spent actively per day and the amount of calories used.
+
+```{r message=FALSE, warning=FALSE}
+ggplot(day_complete,
+       aes(x=total_steps, y=calories)) + 
+  geom_point() +
+  geom_smooth(method = lm, color="red", se=TRUE) +
+  theme_ipsum() +
+  theme(plot.title = element_text(size=12),
+        plot.subtitle = element_text(size=11)
+  ) +
+  labs(title = "Correlation between daily steps and burnt calories",
+       subtitle = "From 2016-04-12 To 2016-05-12",
+       caption = "Data collected by Möbius",
+       x = "daily steps",
+       y = "calories") 
+```
+
+
+The same goes for daily steps and calories.
+
+### Deeper Look into Steps, Intensities and Heartrates
+
+To take a look at the combined data for steps, intensities and heart rates, the data frame for the heart rates per second must be transformed to represent the heart rates per minute since that is the most detailed data that exists for the other two measurements.
+To achieve this a new data frame is created, with the mean, minimum and maximum values of the heartrate within a recorded minute.
+
+```{r message=FALSE, warning=FALSE}
+minute_heartrate <- heartrate_seconds %>% 
+  separate(date_time, c("date", "time"), sep=" ", remove = TRUE) %>% 
+  separate(time, c("hour", "min", "sec"), sep=":") %>% 
+  mutate(sec="00") %>% 
+  unite(time, c("hour", "min", "sec"), sep=":") %>% 
+  unite(date_time, c("date", "time"), sep=" ") %>% 
+  mutate(date_time = ymd_hms(date_time)) %>% 
+  group_by(id, date_time) %>% 
+  summarize(mean_value=mean(value), min_value=min(value), max_value=max(value))
+```
+
+Next this new data frame is joined with the other two tables.
+The null values that are introduced due to this join are changed to 0 to make filtering them out later easier.
+
+```{r message=FALSE, warning=FALSE}
+heartrate_intensities_steps <- minute_heartrate %>% 
+  full_join(minute_intensities_narrow,
+            by=c('id'='id', 'date_time'='activity_minute')
+            ) %>% 
+  full_join(minute_steps_narrow,
+            by=c('id'='id', 'date_time'='activity_minute'))
+
+heartrate_intensities_steps <- heartrate_intensities_steps %>% 
+  mutate_if(is.numeric, ~replace_na(.,0))
+```
+
+Now we first take a look at the heart rates of the different users.
+
+```{r}
+heartrate_intensities_steps %>% 
+  filter(mean_value!=0) %>% 
+  group_by(id) %>% 
+  summarise(mean_heartrate=mean(mean_value, na.rm = TRUE), min_heartrate=min(min_value, na.rm = TRUE), max_heartrate=max(max_value, na.rm = TRUE)) 
+```
+
+This shows some values that seem a bit unrealistic. 
+For example the minimum and maximum heart rates for the top user seem too low and too high to be healthy.
+There might have been some inaccuracies with the measurements of these values.
+ 
+Next we compare how the different intensities are distributed in the data and how many percent of the activity minutes are not caused by taking steps.
+
+```{r}
+heartrate_intensities_steps %>% 
+  group_by(intensity) %>% 
+  summarize(percentage=100*n()/nrow(heartrate_intensities_steps), no_steps_percentage=100*sum(steps==0)/n()) %>% 
+  mutate(intensity=case_when(
+    intensity==0 ~ "0 - Sedentary",
+    intensity==1 ~ "1 - Light",
+    intensity==2 ~ "2 - Moderate",
+    intensity==3 ~ "3 - Very Active"))
+```
+
+So roughly 84% of the recorded minutes are spent with an intensity of 0 which, 13.6% are spent with and intensity of 1 and less than 3% are spent with intensities of 2 and 3.
+Since an intensity of 0 indicates time spent sedentary it seems reasonable that these measurements mostly didn't recorded any steps taken by the user in those time intervals.
+For the other intensities, which range from light to very active activities, the majority of measurements are related to the user walking.
+However other activities also seem to be recorded.
+
+```{r}
+heartrate_intensities_steps %>% 
+  filter(mean_value!=0) %>% 
+  group_by(intensity) %>% 
+  summarise(mean_heartrate=mean(mean_value, na.rm = TRUE), min_heartrate=min(min_value, na.rm = TRUE), max_heartrate=max(max_value, na.rm = TRUE)) %>% 
+  mutate(intensity=case_when(
+    intensity==0 ~ "0 - Sedentary",
+    intensity==1 ~ "1 - Light",
+    intensity==2 ~ "2 - Moderate",
+    intensity==3 ~ "3 - Very Active"))
+```
+
+Taking a look at the heart rates for the different intensities it again seems like there might have been some issues with the measurement of the heart rates.
+A minimum heart rate of 36 or even 67 for the mean heart rate with no activity is very low, where a maximum heart rate of 203 is very high, especially while sitting.
+
+# Main Findings
+
+Before giving suggestions based on the analysis the main findings are summarized here.
+
+* Not all available featured were used by all users. The tracking of calories, intensities, steps and METs was utilized by all users. Meanwhile only 24 users tracked their sleep, 14 users tracked their heart rate and only 8 users measured their weight.
+
+* Not all available features were used the same amout of time in the observed time period. The activity (intinsities, steps, calories) featured were used the most often along with the METs tracking. Next is the measurement of the heart rate, followed by tracking the users sleep and lastly the weight measurements.
+
+* Concerning the sleep tracking there are some outliers, that might suggest some issues with the measurements, since there are quite a few instances, where users slept less than three hours per day.
+
+* The quality of sleep seems to be good for the most part, with over 90% of the recorded data for sleep being evaluated with the value 1, meaning the user is asleep.
+
+* Most of the users are fairly active with 14 users taking an average amount of over 8000 steps daily.
+
+* Compared to the amount of time spent walking however, there is little time spent on other activities.
+
+* There seems to be an issue with the data, since for there are quite a few data points where the amount of recorded hours for a day doesn't add up to 24 hours or is over 24 hours.
+
+* In the same line of thought, the measured heart beats might be inaccurate since some of the values are too low or too high to be realistic or healthy.
+
+# Visualization
+
+Some of the findings of this case study are visualized in a Tableau Dashboard here: [Bellabeat Case Study - Dashboard](https://public.tableau.com/views/BellabeatCaseStudy_17021354382930/BellabeatCaseStudy?:language=de-DE&:display_count=n&:origin=viz_share_link)
+
+# Final Conclusion
+
+After analysing how people use their smart devices these are my recommendations for the marketing strategy concerning bellabeat products.
+
+* Focus on advertising features like monitoring sleep and stress to make sure users are aware of these features and use them, since many people use these products mostly for tracking their activity
+
+* Put emphasis on the added value that the use of certain features bring to the overall evaluation of health data 
+
+* Explain the importance of consistent monitoring for better results and showcase how bellabeat products make this easier by offering multiple options for wearing their wellness tracker
+
+* Advertise products by promising better sensors and more accurate measurements than other brands
+
+* Showcase ease of use by explaining the integration of different bellabeat products through smart technology
+
+
+
+
+
